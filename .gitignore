@@ -4,3 +4,12 @@ __pycache__
 *.pyc
 node_modules
 dist
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.env.*
+!.env.example
+*.pem
+*.key

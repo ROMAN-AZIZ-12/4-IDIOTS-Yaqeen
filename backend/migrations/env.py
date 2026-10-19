@@ -1,9 +1,11 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
+from sqlalchemy import create_engine, pool
+from sqlalchemy.exc import SQLAlchemyError
 from alembic import context
+from app.config import DatabaseSettings, load_settings
+from app.db import Base
+from app import models  # noqa: F401 -- register model metadata
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -18,7 +20,10 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-target_metadata = None
+target_metadata = Base.metadata
+# Escape ConfigParser interpolation exactly once; never persist or log this URL.
+settings = load_settings(DatabaseSettings)
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.get_secret_value().replace("%", "%%"))
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -57,10 +62,9 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
+    connectable = create_engine(
+        config.get_main_option("sqlalchemy.url"), poolclass=pool.NullPool,
+        connect_args={"connect_timeout": 10}, hide_parameters=True, echo=False,
     )
 
     with connectable.connect() as connection:
@@ -75,4 +79,7 @@ def run_migrations_online() -> None:
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    run_migrations_online()
+    try:
+        run_migrations_online()
+    except SQLAlchemyError:
+        raise SystemExit("Migration database operation failed; verify DATABASE_URL and database permissions") from None
