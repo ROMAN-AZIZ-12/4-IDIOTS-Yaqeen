@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 from app.schema_types import DOC_TYPE, EXTRACTION_STATUS, OUTCOME, ROLE, STATUS
@@ -67,6 +67,10 @@ class Application(Base):
     updated_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now(),
     )
+    bank: Mapped["Bank"] = relationship("Bank")
+    borrower: Mapped["User"] = relationship("User", foreign_keys=[borrower_id])
+    documents: Mapped[list["Document"]] = relationship("Document", back_populates="application")
+    assessments: Mapped[list["Assessment"]] = relationship("Assessment", back_populates="application")
 
 
 class Document(Base):
@@ -89,6 +93,7 @@ class Document(Base):
     extraction_status: Mapped[str] = mapped_column(EXTRACTION_STATUS, server_default="pending")
     extracted_json: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = timestamp()
+    application: Mapped["Application"] = relationship("Application", back_populates="documents")
 
 
 class ExtractionAttempt(Base):

@@ -4,13 +4,11 @@ from fastapi.testclient import TestClient
 
 
 def test_health_exact_response_without_external_services(monkeypatch):
-    # main's production app validates all settings; isolate the route factory
-    # using a patched configuration loader before importing the module.
-    from app import config
+    # The served health app must import without unrelated service settings.
+    monkeypatch.delenv("ENV", raising=False)
     monkeypatch.setenv("FRONTEND_ORIGIN", "https://frontend.example.invalid")
-    monkeypatch.setattr(config, "get_settings", lambda: config.load_settings(config.CorsSettings))
-    main = importlib.import_module("app.main")
-    with TestClient(main.create_app(validate_all=False)) as client:
+    main = importlib.reload(importlib.import_module("app.main"))
+    with TestClient(main.app) as client:
         response = client.get("/health")
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}

@@ -19,10 +19,16 @@ if (process.argv[2] === 'install') {
     console.error('Backend virtual environment missing; run npm install first.');
     process.exit(1);
   }
-  const child = spawn(path.resolve(python), ['-m', 'uvicorn', 'app.main:app',
+  const backend = spawn(path.resolve(python), ['-m', 'uvicorn', 'app.main:app',
     '--host', '0.0.0.0', '--port', process.env.PORT || '8000'],
     { cwd: 'backend', stdio: 'inherit', env: process.env });
-  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill(signal));
-  child.on('error', () => { console.error('Could not launch Python backend.'); process.exit(1); });
-  child.on('exit', code => process.exit(code || 0));
+  const viteCommand = windows ? 'npx.cmd' : 'npx';
+  const frontend = spawn(viteCommand, ['vite', '--host', '0.0.0.0'],
+    { stdio: 'inherit', env: process.env });
+  const stop = () => { backend.kill('SIGTERM'); frontend.kill('SIGTERM'); };
+  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, stop);
+  backend.on('error', () => { console.error('Could not launch Python backend.'); stop(); process.exit(1); });
+  frontend.on('error', () => { console.error('Could not launch Vite frontend.'); stop(); process.exit(1); });
+  backend.on('exit', code => { if (code && code !== 0) frontend.kill('SIGTERM'); });
+  frontend.on('exit', code => { if (code && code !== 0) backend.kill('SIGTERM'); });
 }

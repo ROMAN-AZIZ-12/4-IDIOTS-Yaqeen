@@ -1,7 +1,33 @@
-# Yaqeen — Phase 1 backend foundation
+# Yaqeen — Demo-ready MVP
 
-Extends the imported FastAPI/Alembic scaffold. Existing React/Vite files and frozen
-SRS are unchanged. Only `/health` is exposed; authentication and pipelines are deferred.
+Yaqeen is a borrower-to-bank-officer loan preparation demo. Borrowers select a bank, create an application, upload three documents, and submit for extraction and scoring. Officers review the generated report and make the final decision.
+
+## Run locally
+
+Set the variables in `.env.example` and `backend/.env.example` through the workspace Secrets panel. Never commit `.env` or real personal data.
+
+```powershell
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`. The Vite frontend proxies `/api` to the FastAPI server on port 8000. Data and processing state require the configured external Supabase database, private storage bucket, and Gemini settings; migrations and the synthetic seed run from `backend/` as documented below.
+
+```powershell
+Set-Location backend
+python -m alembic upgrade head
+python -m app.seed
+```
+
+The demo uses the existing Phase 2 authentication and Phase 4 application, private-document, extraction, scoring, report, and decision routes. AI output is a suggestion; the officer remains the decision maker.
+
+
+
+This build includes the complete demo journey: borrower authentication, bank selection,
+application creation, private document uploads, background extraction/scoring, officer
+review and borrower-visible decisions. Existing React/Vite files and frozen SRS sections
+6.2, 8, 9 and 10 are unchanged. The borrower response intentionally hides assessment
+scores and reports; officers receive the assessment and final report.
 
 ## Environment
 
@@ -33,11 +59,34 @@ python -m app.seed
 python -m uvicorn app.main:app --reload
 ```
 
-In another terminal: `Invoke-RestMethod http://localhost:8000/health` must give
-`status: ok` (HTTP JSON is exactly `{"status":"ok"}`). First seed creates two banks
-and two officers; the second must report zero created. Existing hashes/2FA state are
-never reset. Seed passwords are bcrypt cost 12; `SEED_PASSWORD` must be 8–72 UTF-8 bytes.
-The seed command is module execution from `backend/`, not `python seed.py`.
+In another terminal:
+
+```powershell
+Invoke-RestMethod http://localhost:8000/health
+```
+
+must give `status: ok` (HTTP JSON is exactly `{"status":"ok"}`).
+
+Authentication routes (Phase 2):
+
+- `POST /auth/signup` — borrowers only (`email`, `password` ≥ 8, `full_name`).
+- `POST /auth/login` — borrowers receive an access JWT; officers receive a pending
+  token and must complete TOTP.
+- `POST /auth/2fa/setup` — officer-only, pending token; returns `otpauth_uri` and
+  `secret`. The secret is stored Fernet-encrypted.
+- `POST /auth/2fa/verify` — officer-only, pending token + 6-digit code; returns an
+  access JWT. First successful verification enables TOTP. Five wrong codes lock the
+  account for 15 minutes (the fifth wrong attempt returns 429, as do later attempts
+  while locked). Replaying the same time step is rejected.
+- `GET /banks` — any authenticated user; returns `{id, name}` for each bank.
+
+Access tokens expire in 30 minutes; pending tokens expire in 5 minutes and carry the
+`pending_2fa` scope. Pending tokens are accepted only by the two `/auth/2fa/*` routes.
+
+First seed creates two banks and two officers; the second must report zero created.
+Existing hashes/2FA state are never reset. Seed passwords are bcrypt cost 12;
+`SEED_PASSWORD` must be 8–72 UTF-8 bytes. The seed command is module execution from
+`backend/`, not `python seed.py`.
 
 For the workspace's npm preview, `npm install` creates the same Python virtual
 environment and installs requirements; `npm run dev` serves the backend using `PORT`
@@ -48,8 +97,8 @@ cannot run this Python project; it needs a Python-enabled runtime.
 
 No shell tool was exposed during implementation. **No compilation, install, pytest,
 server, HTTP, migration, seed, git diff or git status command was executed.**
-The local seed test uses a statement-aware memory double, not PostgreSQL; live seed
-idempotency and actual constraint enforcement still require the external database.
+Auth tests use an in-memory session double, not PostgreSQL; live TOTP, constraint and
+migration behaviour still require the external database.
 
 Review section 9 against model/migration nullability/defaults before applying the
 migration. `locked_until` is nullable for unlocked users. Otherwise fields are non-null

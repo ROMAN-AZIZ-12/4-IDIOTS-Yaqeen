@@ -4,7 +4,7 @@ from datetime import datetime
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 from app.models import primary_key, timestamp
@@ -34,6 +34,7 @@ class Assessment(Base):
     report_source: Mapped[str] = mapped_column(REPORT_SOURCE)
     raw_output: Mapped[str] = mapped_column(sa.Text)
     created_at: Mapped[datetime] = timestamp()
+    application: Mapped["Application"] = relationship("Application", back_populates="assessments")
 
 
 class Decision(Base):
