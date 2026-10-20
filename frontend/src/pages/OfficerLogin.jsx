@@ -1,9 +1,13 @@
+import { useI18n } from "../locale";
+import { AuthLayout, ErrorNotice } from "../components/UI";
+import Icon from "../components/Icon";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { api } from "../api";
 
 export default function OfficerLogin() {
+  const { t } = useI18n();
   const [form, setForm] = useState({ email: "", password: "" });
   const [pendingToken, setPendingToken] = useState("");
   const [setupUri, setSetupUri] = useState("");
@@ -53,35 +57,35 @@ export default function OfficerLogin() {
   }
 
   return (
-    <div className="card">
-      <h1>Officer login</h1>
-      {error && <p className="error">{error}</p>}
+    <AuthLayout officer title={t(!pendingToken ? "Officer sign in" : setupUri ? "Set up two-step verification" : "Verify your sign in")} description={t(!pendingToken ? "Use your provisioned bank account. Two-step verification keeps your workspace protected." : "Enter the 6-digit code from your authenticator app.")}>
+      <ErrorNotice message={error} />
       {!pendingToken ? (
-        <form onSubmit={login}>
-          <label>Email
-            <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+        <form onSubmit={login} aria-busy={loading}>
+          <label>{t("Email address")}
+            <input name="email" type="email" autoComplete="username" dir="ltr" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
           </label>
-          <label>Password
-            <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+          <label>{t("Password")}
+            <input name="password" type="password" autoComplete="current-password" dir="ltr" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
           </label>
-          <button disabled={loading}>{loading ? "Checking..." : "Continue"}</button>
+          <button className="button full-width" disabled={loading}>{loading ? t("Checking...") : t("Continue")}<Icon name="arrow" className="directional" /></button>
+          <p className="hint">{t("Officers use accounts provided by their bank.")}</p>
         </form>
       ) : (
-        <form onSubmit={verify}>
+        <form onSubmit={verify} aria-busy={loading}>
           {setupUri && (
             <div className="totp-setup">
-              <p>Scan this QR code with your authenticator app, then enter the 6-digit code.</p>
-              <QRCodeSVG value={setupUri} size={180} />
-              <p className="secret">{secret}</p>
+              <p>{t("Scan this QR code with your authenticator app, then enter the 6-digit code.")}</p>
+              <div className="qr-surface" role="img" aria-label={t("Authenticator setup QR code")}><QRCodeSVG value={setupUri} size={180} /></div>
+              <span className="small-label">{t("Manual setup key")}</span>
+              <p className="secret" dir="ltr">{secret}</p>
             </div>
           )}
-          {!setupUri && <p>Enter the 6-digit code from your authenticator app.</p>}
-          <label>Code
-            <input value={code} onChange={(e) => setCode(e.target.value)} required maxLength={6} minLength={6} />
+          <label>{t("Verification code")}
+            <input name="code" className="otp-input" type="text" inputMode="numeric" autoComplete="one-time-code" dir="ltr" value={code} onChange={(e) => setCode(e.target.value)} required maxLength={6} minLength={6} />
           </label>
-          <button disabled={loading}>{loading ? "Verifying..." : "Verify"}</button>
+          <button className="button full-width" disabled={loading}>{loading ? t("Verifying...") : t("Verify and continue")}</button>
         </form>
       )}
-    </div>
+    </AuthLayout>
   );
 }

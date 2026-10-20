@@ -1,5 +1,9 @@
+import { useI18n } from "../locale";
+import Icon from "../components/Icon";
+import { BackLink, PageHeading, ProgressSteps, ErrorNotice, LoadingState, DocumentCard, StatusBadge, DecisionPanel, ApplicationOverview } from "../components/UI";
+import { DOC_LABELS, STATUS_HELP } from "../components/uiLabels";
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { api } from "../api";
 
 const DOC_TYPES = [
@@ -9,6 +13,7 @@ const DOC_TYPES = [
 ];
 
 export default function StatusPage() {
+  const { t } = useI18n();
   const { id } = useParams();
   const [app, setApp] = useState(null);
   const [error, setError] = useState("");
@@ -19,26 +24,41 @@ export default function StatusPage() {
     try {
       const data = await api.getApplication(id);
       setApp(data);
+      setError("");
     } catch (err) {
       setError(err.message);
     }
   }
 
   useEffect(() => {
-    load();
-    const timer = setInterval(() => {
-      if (app?.status === "processing") load();
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [id, app?.status]);
+    let cancelled = false;
+    let timer;
+    async function poll() {
+      let terminal = false;
+      try {
+        const data = await api.getApplication(id);
+        if (cancelled) return;
+        setApp(data);
+        setError("");
+        terminal = ["approved", "rejected"].includes(data.status);
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      }
+      if (!cancelled && !terminal) timer = setTimeout(poll, 5000);
+    }
+    setApp(null);
+    poll();
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [id]);
 
   async function handleFile(docType, file) {
     setUploading(true);
     setError("");
+    setMessage("");
     try {
       await api.uploadDocument(id, docType, file);
       await load();
-      setMessage("Document uploaded");
+      setMessage("Document uploaded. Processing has restarted automatically.");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -46,47 +66,35 @@ export default function StatusPage() {
     }
   }
 
-  if (!app) return <p>Loading...</p>;
+  if (!app) return error ? <ErrorNotice message={error} /> : <LoadingState />;
 
   return (
-    <div className="card">
-      <h1>Application status</h1>
-      {error && <p className="error">{error}</p>}
-      {message && <p className="success">{message}</p>}
-      <p><strong>Bank:</strong> {app.bank_name}</p>
-      <p><strong>Amount:</strong> {app.amount_pkr}</p>
-      <p><strong>Status:</strong> <span className={`status ${app.status}`}>{app.status.replace(/_/g, " ")}</span></p>
-
-      {app.decision && (
-        <div className="decision-box">
-          <p><strong>Officer decision:</strong> {app.decision.decision.replace(/_/g, " ")}</p>
-          {app.decision.note && <p><strong>Note:</strong> {app.decision.note}</p>}
-        </div>
-      )}
-
+    <>
+      <BackLink to="/borrower">{t("Back to my applications")}</BackLink>
+      <PageHeading eyebrow={t("Application status")} title={t("Your application’s next chapter.")} action={<StatusBadge status={app.status} />} />
+      <ErrorNotice message={error} />
+      {message && <div className="notice-panel success-panel" role="status"><Icon name="check" />{t(message)}</div>}
+      <DecisionPanel decision={app.decision} />
+      <section className="surface status-summary"><div className="section-heading"><h2>{t("Application details")}</h2></div><ApplicationOverview app={app} /><ProgressSteps status={app.status} /><p className={`status-explainer status-${app.status}`}><Icon name={app.status === "processing" ? "clock" : "document"} /><span>{t(STATUS_HELP[app.status] || app.status)}</span></p>
+        {app.status === "draft" && <Link className="button" to={`/upload/${app.id}`}>{t("Continue application")}<Icon name="arrow" className="directional" /></Link>}
+      </section>
       {app.status === "needs_documents" && app.decision?.requested_doc_type && (
-        <div className="request-box">
-          <p>The officer requested a new <strong>{app.decision.requested_doc_type.replace(/_/g, " ")}</strong>.</p>
-          <input
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png"
-            disabled={uploading}
-            onChange={(e) => e.target.files?.[0] && handleFile(app.decision.requested_doc_type, e.target.files[0])}
-          />
-        </div>
+        <section className="request-panel">
+          <span className="icon-tile"><Icon name="upload" size={26} /></span>
+          <div><h2>{t("Requested document")}</h2><p>{t("Upload a new {document} to continue the review.", { document: t(DOC_LABELS[app.decision.requested_doc_type] || app.decision.requested_doc_type) })}</p>
+            <p className="hint">{t("JPG, PNG or PDF · Up to 10 MB · Up to 5 pages")}</p>
+            <label className={`file-picker ${uploading ? "is-disabled" : ""}`} htmlFor="replacement-file"><Icon name="upload" />{t(uploading ? "Uploading..." : "Choose file")}
+              <input id="replacement-file" type="file" accept=".pdf,.jpg,.jpeg,.png" disabled={uploading} onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) handleFile(app.decision.requested_doc_type, file);
+              }} />
+            </label>
+          </div>
+        </section>
       )}
-
-      <h3>Documents</h3>
-      <ul className="doc-list">
-        {DOC_TYPES.map(({ key, label }) => {
-          const doc = app.documents?.find((d) => d.doc_type === key);
-          return (
-            <li key={key}>
-              {label}: {doc ? `uploaded (version ${doc.version})` : "not uploaded"}
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+      <div className="section-heading"><h2>{t("Documents")}</h2></div>
+      <div className="upload-grid">{DOC_TYPES.map(({ key }) => <DocumentCard key={key} type={key} document={app.documents?.find((d) => d.doc_type === key)} />)}</div>
+    </>
   );
 }

@@ -1,5 +1,7 @@
 import { Navigate, Route, BrowserRouter as Router, Routes } from "react-router-dom";
 import Layout from "./components/Layout";
+import LandingPage from "./pages/LandingPage";
+import { LanguageProvider } from "./i18n";
 import ApplicationForm from "./pages/ApplicationForm";
 import BorrowerDashboard from "./pages/BorrowerDashboard";
 import Login from "./pages/Login";
@@ -22,22 +24,12 @@ function Home() {
   const user = getUser();
   if (user?.role === "borrower") return <Navigate to="/borrower" replace />;
   if (user?.role === "officer") return <Navigate to="/officer" replace />;
-  return (
-    <div className="hero-card">
-      <h1>Yaqeen</h1>
-      <p>Small-business loan file preparation for Pakistan.</p>
-      <p><em>The AI extracts. Code scores. The officer decides.</em></p>
-      <div className="actions">
-        <a href="/signup"><button>Get started</button></a>
-        <a href="/login"><button>Log in</button></a>
-        <a href="/officer-login"><button className="secondary">Officer login</button></a>
-      </div>
-    </div>
-  );
+  return <LandingPage />;
 }
 
 export default function App() {
   return (
+    <LanguageProvider>
     <Router>
       <Layout>
         <Routes>
@@ -55,5 +47,6 @@ export default function App() {
         </Routes>
       </Layout>
     </Router>
+    </LanguageProvider>
   );
 }

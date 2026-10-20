@@ -17,4 +17,4 @@ def test_health_exact_response_without_external_services(monkeypatch):
         assert allowed.headers["access-control-allow-origin"] == "https://frontend.example.invalid"
         denied = client.get("/health", headers={"Origin": "https://other.example.invalid"})
         assert "access-control-allow-origin" not in denied.headers
-        assert client.get("/applications").status_code == 404
+        assert client.get("/applications").status_code == 401

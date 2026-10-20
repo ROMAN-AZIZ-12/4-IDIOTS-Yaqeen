@@ -1,6 +1,7 @@
 """GET /banks route (authenticated, no role restriction)."""
 from __future__ import annotations
 
+import uuid
 from typing import Annotated, Sequence
 
 from fastapi import APIRouter, Depends
@@ -16,7 +17,7 @@ router = APIRouter()
 
 
 class BankResponse(BaseModel):
-    id: str
+    id: uuid.UUID
     name: str
 
     model_config = ConfigDict(from_attributes=True)

@@ -13,6 +13,17 @@ function removeToken() {
   localStorage.removeItem("access_token");
 }
 
+function errorMessage(detail) {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) return detail.map(errorMessage).filter(Boolean).join("; ");
+  if (detail && typeof detail === "object") {
+    const message = errorMessage(detail.msg || detail.message || detail.detail);
+    const field = Array.isArray(detail.loc) ? detail.loc.filter((part) => part !== "body").join(".") : "";
+    return message && field ? `${field}: ${message}` : message;
+  }
+  return "";
+}
+
 async function request(path, options = {}) {
   const proxiedPath = API_URL ? path : (path.startsWith("/api/") ? path : `/api${path}`);
   const url = `${API_URL}${proxiedPath}`;
@@ -29,7 +40,7 @@ async function request(path, options = {}) {
     data = await response.json();
   }
   if (!response.ok) {
-    const detail = data?.detail || data?.message || `${response.status} error`;
+    const detail = errorMessage(data?.detail) || errorMessage(data?.message) || `${response.status} error`;
     const err = new Error(detail);
     err.status = response.status;
     err.data = data;

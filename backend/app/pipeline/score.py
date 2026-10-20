@@ -32,7 +32,9 @@ def _bill_points(ratio: float | None, thin: bool) -> tuple[int, str]:
     return 0, f"on-time ratio {ratio:.0%}"
 
 
-def _regularity_points(avg_credits: float, share: float, thin: bool) -> tuple[int, str]:
+def _regularity_points(avg_credits: float | None, share: float | None, thin: bool) -> tuple[int, str]:
+    if avg_credits is None or share is None:
+        return 0, "verified transaction rows missing"
     max_total = 12 if thin else 25
     credit_thresholds = [(20, 15), (10, 10), (4, 5)]
     credit_points = 0

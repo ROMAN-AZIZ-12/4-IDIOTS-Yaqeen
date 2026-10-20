@@ -2,8 +2,19 @@
 from __future__ import annotations
 
 import uuid
+from typing import Annotated
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ValidatorFunctionWrapHandler, WrapValidator
+
+
+def _login_email(value: object, handler: ValidatorFunctionWrapHandler) -> str:
+    # Login-only compatibility for existing synthetic seed identities.
+    # All other addresses retain EmailStr validation, including signup.
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"officer.a@example.invalid", "officer.b@example.invalid"}:
+            return normalized
+    return handler(value)
 
 
 class SignupRequest(BaseModel):
@@ -22,7 +33,7 @@ class UserResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: Annotated[EmailStr, WrapValidator(_login_email)]
     password: str
 
 

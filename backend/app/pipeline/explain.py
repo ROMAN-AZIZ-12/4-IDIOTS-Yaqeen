@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from app.config import Settings, get_settings
 
@@ -24,7 +24,7 @@ PROMPTS_DIR = Path(__file__).resolve().parents[3] / "prompts"
 
 class Explanation(BaseModel):
     summary: str
-    factor_notes: list[str]
+    factor_notes: list[str] = Field(min_length=4, max_length=4)
 
 
 def _load_prompt(version: str) -> str:
@@ -35,9 +35,9 @@ def _allowed_numbers(features: dict[str, Any], factors: dict[str, Any]) -> set[f
     """Numbers that may legitimately appear in the explanation text."""
     values: set[float] = set()
     for key, value in features.items():
-        if isinstance(value, (int, float)):
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
             values.add(round(float(value), 1))
-    for data in factors.values():
+    for data in factors.get("factors", factors).values():
         if isinstance(data, dict):
             pts = data.get("points")
             if isinstance(pts, (int, float)):
@@ -89,9 +89,9 @@ def explain(
     """Return (report_json, report_source)."""
     if settings is None:
         settings = get_settings()
-    prompt_text = _load_prompt("explain.v1")
     payload = json.dumps({"features": features, "factors": factors}, default=str)
     try:
+        prompt_text = _load_prompt("explain.v1")
         if genai is None:
             raise RuntimeError("google-genai package is not installed")
         client = genai.Client(api_key=settings.GEMINI_API_KEY.get_secret_value())
@@ -113,7 +113,7 @@ def explain(
             return report_json, "model"
     except (Exception, ValidationError):
         pass
-    return _template_report(factors, factors), "template"
+    return _template_report(features, factors), "template"
 
 
 # Avoid shadowing the module name for callers.

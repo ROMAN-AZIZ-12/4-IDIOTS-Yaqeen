@@ -1,10 +1,58 @@
+/* Yaqeen design system: shared by public, borrower and officer surfaces. */
 :root {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  line-height: 1.5;
-  color: #1f2937;
-  background: #f6f8fa;
+  --forest: #073d32; --primary: #146b50; --primary-hover: #0c513d;
+  --mint: #e7f4ec; --mint-strong: #c8e6d4; --bg: #f8faf7; --surface: #fff;
+  --text: #132b22; --muted: #5c6f65; --border: #dce6df;
+  --error: #a22c35; --error-bg: #fff0f0; --warning: #825519; --warning-bg: #fff7e7;
+  --info: #255b83; --info-bg: #edf5fb;
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s6: 24px;
+  --s8: 32px; --s12: 48px; --s16: 64px; --s24: 96px;
+  --radius-sm: 10px; --radius: 18px; --radius-lg: 28px;
+  --shadow: 0 6px 28px rgb(7 61 50 / 4%); --shadow-raised: 0 20px 65px rgb(7 61 50 / 10%);
+  --motion: 160ms ease; --content-width: 1184px;
+  --font-en: "Manrope", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-ur: "Noto Sans Arabic", "Noto Nastaliq Urdu", "Urdu Typesetting", Tahoma, sans-serif;
+  font-family: var(--font-en); color: var(--text); background: var(--bg);
+  font-synthesis: none; line-height: 1.6; font-size: 16px;
 }
-
-body { margin: 0; }
-
-#root { min-height: 100svh; }
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 110px; }
+body { margin: 0; min-width: 0; }
+button, input, select, textarea { font: inherit; }
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button, a { touch-action: manipulation; }
+a { color: var(--primary); text-decoration: none; }
+a:hover { color: var(--forest); }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .58; }
+:focus-visible { outline: 3px solid #289b7e; outline-offset: 4px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offset: 2px; }
+img, svg { max-width: 100%; }
+svg { flex-shrink: 0; }
+h1, h2, h3, p { margin-block: 0; }
+h1, h2, h3 { color: var(--text); line-height: 1.2; letter-spacing: -.035em; font-weight: 650; }
+h1 { font-size: clamp(1.85rem, 3vw, 2.3rem); }
+h2 { font-size: 1.35rem; }
+h3 { font-size: 1.05rem; letter-spacing: -.015em; }
+p + p { margin-block-start: var(--s3); }
+p { overflow-wrap: anywhere; }
+small { font-size: .875rem; }
+ul, ol { padding-inline-start: 1.3rem; }
+dl { margin: 0; }
+dd { margin: 0; overflow-wrap: anywhere; }
+dt, .small-label { color: var(--muted); font-size: .875rem; }
+dd { margin-block-start: var(--s1); }
+bdi { overflow-wrap: anywhere; }
+[dir="ltr"] { unicode-bidi: isolate; }
+input[dir="ltr"] { font-family: var(--font-en); }
+[dir="auto"] { unicode-bidi: plaintext; }
+[lang="ur"] { font-family: var(--font-ur); line-height: 1.9; }
+html[lang="ur"] h1, html[lang="ur"] h2, html[lang="ur"] h3 { letter-spacing: 0; line-height: 1.65; }
+html[dir="rtl"] .directional { transform: scaleX(-1); }
+html[dir="rtl"] input[dir="ltr"] { text-align: left; }
+::selection { background: var(--mint-strong); color: var(--forest); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}

@@ -1,5 +1,7 @@
 # AI usage
 
+2026-10-19 repair pass: AI updated multipart upload binding, extraction failure classification/backoff and retry eligibility, handwritten-row exclusion and monthly scoring inputs, explanation fallback, current-document display, borrower polling/re-upload handling, and separate officer affordability information. Human review and all testing/runtime verification remain pending; no tests were added or run, and no migrations, seeds, commits, or pushes were performed.
+
 Phase 1 backend foundation was AI-assisted: configuration, SQLAlchemy models/sessions,
 initial Alembic migration, health/CORS, synthetic seeding, focused tests, preview bridge
 and setup/dependency notes. Human review is pending for schema/nullability/defaults,

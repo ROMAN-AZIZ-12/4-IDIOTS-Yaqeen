@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 import filetype
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 from pypdf import PdfReader
 from PIL import Image
@@ -85,7 +85,7 @@ def _ext_for_mime(mime: str) -> str:
 @router.post("/applications/{application_id}/documents", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 def upload_document(
     application_id: uuid.UUID,
-    doc_type: str,
+    doc_type: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
     background_tasks: BackgroundTasks,
     user: Annotated[CurrentUser, Depends(borrower)],

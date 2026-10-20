@@ -4,6 +4,8 @@ from app.config import ConfigurationError, CorsSettings, DatabaseSettings, Setti
 
 
 def test_missing_settings_report_names_only(monkeypatch):
+    # Local dotenv values must not fill the intentionally missing test settings.
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
     for name in Settings.model_fields:
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("GEMINI_API_KEY", "synthetic-sensitive-marker")

@@ -6,6 +6,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import httpx
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -87,7 +88,31 @@ def _save_attempt(
             raw_output=raw_output,
             validation_error=validation_error,
             latency_ms=latency_ms,
+            created_at=datetime.now(timezone.utc),
         )
+    )
+
+
+def failure_outcome(session: Session, document: Document) -> str | None:
+    """Classify a failed document using the existing attempt records."""
+    session.flush()
+    attempt = (
+        session.query(ExtractionAttempt)
+        .filter_by(document_id=document.id,
+                   prompt_version=f"extract.{document.doc_type}.v1")
+        .order_by(ExtractionAttempt.created_at.desc())
+        .first()
+    )
+    return attempt.outcome if attempt is not None else None
+
+
+def _retryable(exc: Exception) -> bool:
+    code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+    if code is None:
+        code = getattr(getattr(exc, "response", None), "status_code", None)
+    return (
+        code == 429 or isinstance(code, int) and 500 <= code < 600
+        or isinstance(exc, (httpx.TransportError, TimeoutError, ConnectionError))
     )
 
 
@@ -122,7 +147,18 @@ def extract_document(
     prompt = base_prompt
     model = settings.GEMINI_MODEL
     last_error = ""
-    for attempt in range(2):
+    # An officer retry after an API failure must not reset validation's budget.
+    invalid_attempts = (
+        session.query(ExtractionAttempt)
+        .filter_by(document_id=document.id, prompt_version=version, outcome="invalid")
+        .order_by(ExtractionAttempt.created_at.desc())
+        .all()
+    )
+    invalid_count = len(invalid_attempts)
+    if invalid_attempts:
+        prompt += "\n\nPrevious attempt failed validation:\n" + invalid_attempts[0].validation_error
+    service_retries = 0
+    while invalid_count < 2:
         raw_output = ""
         latency_ms = 0
         try:
@@ -130,7 +166,7 @@ def extract_document(
                 file_bytes, document.mime, prompt, schema_cls, settings
             )
             latency_ms = int(latency)
-            parsed = json.loads(raw_output) if raw_output else {}
+            parsed = json.loads(raw_output)
             validated = schema_cls.model_validate(parsed)
             _save_attempt(
                 session, document.id, version, model, "ok",
@@ -140,6 +176,7 @@ def extract_document(
             document.extracted_json = validated.model_dump(mode="json")
             return document
         except (ValidationError, json.JSONDecodeError) as exc:
+            invalid_count += 1
             last_error = str(exc)
             _save_attempt(
                 session, document.id, version, model, "invalid",
@@ -147,20 +184,15 @@ def extract_document(
             )
             prompt = base_prompt + "\n\nPrevious attempt failed validation:\n" + last_error
         except Exception as exc:
-            last_error = str(exc)
-            # Back off on API errors.
-            if attempt < len(BACKOFF_SECONDS) - 1:
-                _save_attempt(
-                    session, document.id, version, model, "api_error",
-                    raw_output, last_error, latency_ms,
-                )
-                time.sleep(BACKOFF_SECONDS[attempt])
-            else:
-                _save_attempt(
-                    session, document.id, version, model, "api_error",
-                    raw_output, last_error, latency_ms,
-                )
+            # Record the category without persisting potentially sensitive API URLs.
+            _save_attempt(
+                session, document.id, version, model, "api_error",
+                raw_output, type(exc).__name__, latency_ms,
+            )
+            if not _retryable(exc) or service_retries == len(BACKOFF_SECONDS):
                 document.extraction_status = "failed"
                 return document
+            time.sleep(BACKOFF_SECONDS[service_retries])
+            service_retries += 1
     document.extraction_status = "failed"
     return document

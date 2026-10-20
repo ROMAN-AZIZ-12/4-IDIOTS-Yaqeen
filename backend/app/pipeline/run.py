@@ -13,10 +13,11 @@ from app.config import Settings, get_settings
 from app.db import get_session_factory
 from app.models import Application, Assessment, Document
 from app.pipeline.explain import run_explain
-from app.pipeline.extract import extract_document
+from app.pipeline.extract import extract_document, failure_outcome
 from app.pipeline.features import compute_features
 from app.pipeline.score import score
 from app.storage import get_file
+from app.status import validate_transition
 
 
 RUBRIC_VERSION = "1"
@@ -41,7 +42,9 @@ def _load_extracted_json(doc: Document) -> dict[str, Any]:
 def _do_extraction(session: Session, application: Application, settings: Settings) -> list[Document]:
     docs = _current_documents(session, application.id)
     for doc in docs:
-        if doc.extraction_status != "pending":
+        if doc.extraction_status == "ok":
+            continue
+        if doc.extraction_status == "failed" and failure_outcome(session, doc) == "invalid":
             continue
         file_bytes = get_file(doc.storage_key, settings)
         extract_document(session, doc, file_bytes, settings)
@@ -68,28 +71,30 @@ def run_pipeline(application_id: object, settings: Settings | None = None) -> No
         if application.status != "processing":
             return
 
-        docs = _do_extraction(session, application, settings)
+        try:
+            docs = _do_extraction(session, application, settings)
+        except Exception:
+            # Storage/service failures are retryable; preserve completed extractions.
+            validate_transition(application.status, "processing_failed")
+            application.status = "processing_failed"
+            application.processing_started_at = None
+            return
 
-        # Missing required document types -> manual review.
-        for doc_type in ("utility_bill", "transaction_statement", "cnic"):
-            if _missing_doc_type(docs, doc_type):
-                doc = Document(
-                    application_id=application.id,
-                    doc_type=doc_type,
-                    version=1,
-                    is_current=True,
-                    storage_key="",
-                    sha256="",
-                    mime="",
-                    size_bytes=0,
-                    pages=0,
-                    extraction_status="failed",
-                )
-                session.add(doc)
-                docs.append(doc)
+        if any(_missing_doc_type(docs, kind) for kind in ("utility_bill", "transaction_statement", "cnic")):
+            validate_transition(application.status, "processing_failed")
+            application.status = "processing_failed"
+            application.processing_started_at = None
+            return
 
         if _any_status(docs, "failed"):
-            application.status = "needs_manual_review"
+            next_status = (
+                "processing_failed"
+                if any(failure_outcome(session, doc) != "invalid"
+                       for doc in docs if doc.extraction_status == "failed")
+                else "needs_manual_review"
+            )
+            validate_transition(application.status, next_status)
+            application.status = next_status
             application.processing_started_at = None
             return
         if _any_status(docs, "pending"):
@@ -119,5 +124,6 @@ def run_pipeline(application_id: object, settings: Settings | None = None) -> No
             raw_output=json.dumps(report_json),
         )
         session.add(assessment)
+        validate_transition(application.status, "ready_for_review")
         application.status = "ready_for_review"
         application.processing_started_at = None

@@ -2,10 +2,12 @@
 const { spawnSync, spawn } = require('node:child_process');
 const { existsSync } = require('node:fs');
 const path = require('node:path');
+const root = path.resolve(__dirname, '..');
+process.chdir(root);
 const windows = process.platform === 'win32';
-const python = path.join('backend', '.venv', windows ? 'Scripts/python.exe' : 'bin/python');
+const python = path.join(root, 'backend', '.venv', windows ? 'Scripts/python.exe' : 'bin/python');
 function run(command, args) {
-  const result = spawnSync(command, args, { stdio: 'inherit' });
+  const result = spawnSync(command, args, { cwd: root, stdio: 'inherit' });
   if (result.error || result.status !== 0) {
     console.error('Python setup failed. Python 3.11+ and pip/network access are required.');
     process.exit(result.status || 1);
@@ -19,12 +21,32 @@ if (process.argv[2] === 'install') {
     console.error('Backend virtual environment missing; run npm install first.');
     process.exit(1);
   }
-  const backend = spawn(path.resolve(python), ['-m', 'uvicorn', 'app.main:app',
+  // Use the backend settings loader without exporting dotenv secrets to Vite.
+  const configuration = spawnSync(python, ['-m', 'app.config'], {
+    cwd: path.join(root, 'backend'), stdio: 'inherit', env: process.env,
+  });
+  if (configuration.error) {
+    console.error('Could not run the backend configuration check.');
+    process.exit(1);
+  }
+  if (configuration.status !== 0) process.exit(configuration.status || 1);
+  if (process.argv[2] === 'check') process.exit(0);
+  let viteCli;
+  try {
+    const vitePackage = require.resolve('vite/package.json', {
+      paths: [root, path.join(root, 'frontend')],
+    });
+    viteCli = path.join(path.dirname(vitePackage), 'bin', 'vite.js');
+  } catch {
+    console.error('Local Vite installation missing; run npm.cmd install in frontend on Windows, or npm install elsewhere.');
+    process.exit(1);
+  }
+  const backend = spawn(python, ['-m', 'uvicorn', 'app.main:app',
     '--host', '0.0.0.0', '--port', process.env.PORT || '8000'],
-    { cwd: 'backend', stdio: 'inherit', env: process.env });
-  const viteCommand = windows ? 'npx.cmd' : 'npx';
-  const frontend = spawn(viteCommand, ['vite', '--host', '0.0.0.0'],
-    { stdio: 'inherit', env: process.env });
+    { cwd: path.join(root, 'backend'), stdio: 'inherit', env: process.env });
+  const frontend = spawn(process.execPath, [viteCli, '--host', '0.0.0.0',
+    '--config', path.join(root, 'frontend', 'vite.config.js')],
+    { cwd: root, stdio: 'inherit', env: process.env });
   const stop = () => { backend.kill('SIGTERM'); frontend.kill('SIGTERM'); };
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, stop);
   backend.on('error', () => { console.error('Could not launch Python backend.'); stop(); process.exit(1); });

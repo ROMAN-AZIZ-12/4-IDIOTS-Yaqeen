@@ -1,8 +1,12 @@
+import { useI18n } from "../locale";
+import { AuthLayout, ErrorNotice } from "../components/UI";
+import Icon from "../components/Icon";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 
 export default function Login() {
+  const { t } = useI18n();
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -28,18 +32,19 @@ export default function Login() {
   }
 
   return (
-    <div className="card">
-      <h1>Borrower login</h1>
-      {error && <p className="error">{error}</p>}
-      <form onSubmit={handleSubmit}>
-        <label>Email
-          <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+    <AuthLayout title={t("Welcome back")} description={t("Sign in to continue your application or check its progress.")}>
+      <ErrorNotice message={error} />
+      <form onSubmit={handleSubmit} aria-busy={loading}>
+        <label>{t("Email address")}
+          <input name="email" type="email" autoComplete="username" dir="ltr" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
         </label>
-        <label>Password
-          <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
+        <label>{t("Password")}
+          <input name="password" type="password" autoComplete="current-password" dir="ltr" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
         </label>
-        <button disabled={loading}>{loading ? "Logging in..." : "Log in"}</button>
+        <button className="button full-width" disabled={loading}>{loading ? t("Signing in...") : t("Sign in")}<Icon name="arrow" className="directional" /></button>
       </form>
-    </div>
+      <p className="auth-links">{t("New to Yaqeen?")} <Link to="/signup">{t("Create account")}</Link></p>
+      <p className="auth-links subtle"><Link to="/officer-login">{t("Looking for officer sign in?")}</Link></p>
+    </AuthLayout>
   );
 }

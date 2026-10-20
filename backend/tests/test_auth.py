@@ -179,19 +179,19 @@ def _encrypted_totp_secret(secret: str | None = None) -> str:
 class TestSignup:
     def test_borrower_signup_creates_user(self, client: TestClient) -> None:
         response = client.post("/auth/signup", json={
-            "email": "Borrower@Example.invalid",
+            "email": "Borrower@Example.com",
             "password": "password123",
             "full_name": "Ali Khan",
         })
         assert response.status_code == 201
         body = response.json()
-        assert body["email"] == "borrower@example.invalid"
+        assert body["email"] == "borrower@example.com"
         assert body["full_name"] == "Ali Khan"
         assert body["role"] == "borrower"
 
     def test_password_is_bcrypt_hashed(self, client: TestClient) -> None:
         client.post("/auth/signup", json={
-            "email": "b@example.invalid",
+            "email": "b@example.com",
             "password": "password123",
             "full_name": "Borrower",
         })
@@ -201,13 +201,13 @@ class TestSignup:
         assert verify_password("password123", user.password_hash)
 
     def test_duplicate_email_rejected(self, client: TestClient) -> None:
-        payload = {"email": "dup@example.invalid", "password": "password123", "full_name": "A"}
+        payload = {"email": "dup@example.com", "password": "password123", "full_name": "A"}
         assert client.post("/auth/signup", json=payload).status_code == 201
         assert client.post("/auth/signup", json=payload).status_code == 409
 
     def test_short_password_rejected(self, client: TestClient) -> None:
         response = client.post("/auth/signup", json={
-            "email": "short@example.invalid", "password": "short", "full_name": "A",
+            "email": "short@example.com", "password": "short", "full_name": "A",
         })
         assert response.status_code == 422
 
@@ -215,9 +215,9 @@ class TestSignup:
 class TestBorrowerLogin:
     def test_valid_login_returns_access_token(self, client: TestClient) -> None:
         session = app.dependency_overrides[get_db]()
-        _add_borrower(session, "borrower@example.invalid", "password123")
+        _add_borrower(session, "borrower@example.com", "password123")
         response = client.post("/auth/login", json={
-            "email": "borrower@example.invalid", "password": "password123",
+            "email": "borrower@example.com", "password": "password123",
         })
         assert response.status_code == 200
         body = response.json()
@@ -229,16 +229,16 @@ class TestBorrowerLogin:
 
     def test_invalid_credentials_generic(self, client: TestClient) -> None:
         session = app.dependency_overrides[get_db]()
-        _add_borrower(session, "b@example.invalid", "password123")
+        _add_borrower(session, "b@example.com", "password123")
         response = client.post("/auth/login", json={
-            "email": "b@example.invalid", "password": "wrongpassword",
+            "email": "b@example.com", "password": "wrongpassword",
         })
         assert response.status_code == 401
         assert "Invalid credentials" in response.json()["detail"]
 
     def test_unknown_email_generic(self, client: TestClient) -> None:
         response = client.post("/auth/login", json={
-            "email": "nobody@example.invalid", "password": "password123",
+            "email": "nobody@example.com", "password": "password123",
         })
         assert response.status_code == 401
 
@@ -247,9 +247,9 @@ class TestOfficer2fa:
     def test_first_login_requires_enrolment(self, client: TestClient) -> None:
         session = app.dependency_overrides[get_db]()
         bank_id = uuid.uuid4()
-        _add_officer(session, "officer@example.invalid", "password123", bank_id)
+        _add_officer(session, "officer@example.com", "password123", bank_id)
         response = client.post("/auth/login", json={
-            "email": "officer@example.invalid", "password": "password123",
+            "email": "officer@example.com", "password": "password123",
         })
         assert response.status_code == 200
         body = response.json()
@@ -262,7 +262,7 @@ class TestOfficer2fa:
     def test_setup_returns_uri_and_secret(self, client: TestClient) -> None:
         session = app.dependency_overrides[get_db]()
         bank_id = uuid.uuid4()
-        officer = _add_officer(session, "officer@example.invalid", "password123", bank_id)
+        officer = _add_officer(session, "officer@example.com", "password123", bank_id)
         pending = jwt_helpers.create_pending_token(
             officer.id, officer.role, officer.bank_id, get_settings(),
         )
@@ -284,7 +284,7 @@ class TestOfficer2fa:
     def test_verify_correct_code_enables_totp(self, client: TestClient) -> None:
         session = app.dependency_overrides[get_db]()
         bank_id = uuid.uuid4()
-        officer = _add_officer(session, "officer@example.invalid", "password123", bank_id)
+        officer = _add_officer(session, "officer@example.com", "password123", bank_id)
         pending = jwt_helpers.create_pending_token(
             officer.id, officer.role, officer.bank_id, get_settings(),
         )
@@ -304,11 +304,11 @@ class TestOfficer2fa:
     def test_subsequent_login_requires_2fa(self, client: TestClient) -> None:
         session = app.dependency_overrides[get_db]()
         bank_id = uuid.uuid4()
-        officer = _add_officer(session, "officer@example.invalid", "password123", bank_id)
+        officer = _add_officer(session, "officer@example.com", "password123", bank_id)
         officer.totp_enabled = True
         officer.totp_secret_enc = "enc"
         response = client.post("/auth/login", json={
-            "email": "officer@example.invalid", "password": "password123",
+            "email": "officer@example.com", "password": "password123",
         })
         assert response.status_code == 200
         assert response.json()["status"] == "2fa_required"
@@ -316,7 +316,7 @@ class TestOfficer2fa:
     def test_wrong_code_increments_failures(self, client: TestClient) -> None:
         session = app.dependency_overrides[get_db]()
         bank_id = uuid.uuid4()
-        officer = _add_officer(session, "officer@example.invalid", "password123", bank_id)
+        officer = _add_officer(session, "officer@example.com", "password123", bank_id)
         officer.totp_enabled = True
         officer.totp_secret_enc = _encrypted_totp_secret()
         pending = jwt_helpers.create_pending_token(
@@ -331,7 +331,7 @@ class TestOfficer2fa:
     def test_five_wrong_codes_lock_account(self, client: TestClient) -> None:
         session = app.dependency_overrides[get_db]()
         bank_id = uuid.uuid4()
-        officer = _add_officer(session, "officer@example.invalid", "password123", bank_id)
+        officer = _add_officer(session, "officer@example.com", "password123", bank_id)
         officer.totp_enabled = True
         officer.totp_secret_enc = _encrypted_totp_secret()
         pending = jwt_helpers.create_pending_token(
@@ -353,7 +353,7 @@ class TestOfficer2fa:
     def test_used_code_cannot_be_reused(self, client: TestClient) -> None:
         session = app.dependency_overrides[get_db]()
         bank_id = uuid.uuid4()
-        officer = _add_officer(session, "officer@example.invalid", "password123", bank_id)
+        officer = _add_officer(session, "officer@example.com", "password123", bank_id)
         pending = jwt_helpers.create_pending_token(
             officer.id, officer.role, officer.bank_id, get_settings(),
         )
@@ -391,7 +391,7 @@ class TestOfficer2fa:
     def test_access_token_rejected_by_2fa_routes(self, client: TestClient) -> None:
         session = app.dependency_overrides[get_db]()
         bank_id = uuid.uuid4()
-        officer = _add_officer(session, "officer@example.invalid", "password123", bank_id)
+        officer = _add_officer(session, "officer@example.com", "password123", bank_id)
         access = jwt_helpers.create_access_token(
             officer.id, officer.role, officer.bank_id, get_settings(),
         )

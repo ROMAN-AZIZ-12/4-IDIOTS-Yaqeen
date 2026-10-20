@@ -92,6 +92,11 @@ def retry_application(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     assert_application_access(user, application)
 
+    if application.status != "processing_failed":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only failed processing can be retried",
+        )
     validate_transition(application.status, "processing")
     application.status = "processing"
     application.processing_started_at = datetime.now(timezone.utc)

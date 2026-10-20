@@ -1,11 +1,15 @@
-"""Environment-only configuration. Never serialize settings or raw validation errors."""
+"""Environment-first configuration. Never serialize settings or raw validation errors."""
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal, TypeVar
 from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, ValidationError, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict, SettingsError
 from sqlalchemy.engine import make_url
+
+
+BACKEND_ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
 
 
 class ConfigurationError(RuntimeError):
@@ -15,7 +19,9 @@ class ConfigurationError(RuntimeError):
 class EnvironmentSettings(BaseSettings):
     model_config = SettingsConfigDict(
         case_sensitive=True, extra="ignore", hide_input_in_errors=True,
-        env_file=None, frozen=True,
+        # Process environment (including injected workspace Secrets) overrides dotenv.
+        # Anchor the path here so launching from root or backend behaves identically.
+        env_file=BACKEND_ENV_FILE, env_file_encoding="utf-8-sig", frozen=True,
     )
 
 
@@ -101,13 +107,29 @@ def load_settings(kind: type[T]) -> T:
     try:
         return kind()
     except ValidationError as exc:
-        # Do not chain the original error: errors() includes unredacted input.
-        names = sorted({str(error["loc"][0]) for error in exc.errors()})
+        # Exclude input values and validator context, and never chain raw errors.
+        names = sorted({
+            str(error["loc"][0])
+            for error in exc.errors(include_input=False, include_context=False, include_url=False)
+        })
         raise ConfigurationError(
             "Missing or invalid environment variables: " + ", ".join(names)
+        ) from None
+    except (SettingsError, OSError, UnicodeError):
+        raise ConfigurationError(
+            "Unable to load configuration; check environment file access and encoding."
         ) from None
 
 
 @lru_cache
 def get_settings() -> Settings:
     return load_settings(Settings)
+
+
+if __name__ == "__main__":
+    # Configuration only: no connections, service startup, or database writes.
+    try:
+        load_settings(Settings)
+    except ConfigurationError as exc:
+        raise SystemExit(str(exc)) from None
+    print("Configuration check passed.")

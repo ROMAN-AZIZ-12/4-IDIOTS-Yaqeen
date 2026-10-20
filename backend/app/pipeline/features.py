@@ -86,12 +86,18 @@ def _count_credits_per_month(rows: list[dict]) -> dict[str, int]:
 
 def _compute_credit_features(rows: list[dict], period_start: Any, period_end: Any):
     monthly_totals = _monthly_credit_totals(rows)
+    start, end = _parse_date(period_start), _parse_date(period_end)
+    if start is not None and end is not None and start <= end:
+        year, month = start.year, start.month
+        while (year, month) <= (end.year, end.month):
+            monthly_totals.setdefault(f"{year}-{month:02d}", 0.0)
+            year, month = (year + 1, 1) if month == 12 else (year, month + 1)
     months_covered = len(monthly_totals)
     total_values = list(monthly_totals.values())
     credit_cv = _cv(total_values)
     counts = _count_credits_per_month(rows)
-    avg_credits_per_month = statistics.mean(counts.values()) if counts else 0.0
-    share_months_with_credit = 1.0 if months_covered > 0 else 0.0
+    avg_credits_per_month = sum(counts.values()) / months_covered if months_covered else 0.0
+    share_months_with_credit = sum(v > 0 for v in monthly_totals.values()) / months_covered if months_covered else 0.0
     period_days = _days_between(_parse_date(period_start), _parse_date(period_end))
     return {
         "months_covered": months_covered,
@@ -198,8 +204,16 @@ def compute_features(
 ) -> tuple[dict, list[str]]:
     """Return (features_json, flags)."""
     flags: list[str] = []
+    handwritten = statement.get("source_kind") == "handwritten"
+    if handwritten:
+        flags.append("handwritten_statement_unverified_not_scored")
+        # Preserve original extracted data; only the scoring view excludes rows.
+        statement = {**statement, "rows": []}
+    rows = statement.get("rows") or []
+    if not rows:
+        flags.append("missing_transaction_rows")
     credit = _compute_credit_features(
-        statement.get("rows") or [], statement.get("period_start"), statement.get("period_end")
+        rows, statement.get("period_start"), statement.get("period_end")
     )
 
     thin_statement = credit["period_days"] is not None and credit["period_days"] < 90
@@ -222,8 +236,8 @@ def compute_features(
     if not name_match_statement_cnic and statement.get("account_holder_name"):
         flags.append("statement_name_mismatch")
 
-    totals_match = _totals_match(statement)
-    if not totals_match:
+    totals_match = False if handwritten else _totals_match(statement)
+    if not totals_match and not handwritten:
         flags.append("printed_totals_mismatch")
 
     required_fields_ratio = _required_fields_ratio(bill, statement, cnic)
@@ -252,4 +266,8 @@ def compute_features(
         "thin_statement": thin_statement,
         "thin_bill": thin_bill,
     }
+    if not rows:
+        features["credit_cv"] = None
+        features["avg_credits_per_month"] = None
+        features["share_months_with_credit"] = None
     return features, flags

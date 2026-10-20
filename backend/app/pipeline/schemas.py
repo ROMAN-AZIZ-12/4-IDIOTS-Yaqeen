@@ -1,7 +1,7 @@
 """Frozen extraction schemas from SRS section 6.2."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date as Date
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -9,10 +9,10 @@ from pydantic import BaseModel, Field
 
 class UtilityBillHistoryRow(BaseModel):
     month: str | None = None
-    due_date: date | None = None
+    due_date: Date | None = None
     amount_billed: float | None = None
     amount_paid: float | None = None
-    paid_date: date | None = None
+    paid_date: Date | None = None
 
 
 class UtilityBill(BaseModel):
@@ -20,14 +20,14 @@ class UtilityBill(BaseModel):
     consumer_name: str | None = None
     reference_no: str | None = None
     billing_month: str | None = None
-    due_date: date | None = None
+    due_date: Date | None = None
     amount_due: float | None = None
     history: list[UtilityBillHistoryRow] | None = None
     visual_observations: str | None = None
 
 
 class TransactionRow(BaseModel):
-    date: date | None = None
+    date: Date | None = None
     description: str | None = None
     credit: float | None = None
     debit: float | None = None
@@ -39,8 +39,8 @@ class TransactionStatement(BaseModel):
     source_kind: Literal["printed", "handwritten"] | None = None
     account_holder_name: str | None = None
     institution: str | None = None
-    period_start: date | None = None
-    period_end: date | None = None
+    period_start: Date | None = None
+    period_end: Date | None = None
     rows: list[TransactionRow] | None = None
     printed_total_credits: float | None = None
     printed_total_debits: float | None = None
@@ -49,7 +49,7 @@ class TransactionStatement(BaseModel):
 class CNIC(BaseModel):
     full_name: str | None = None
     cnic_number: str | None = None
-    date_of_birth: date | None = None
+    date_of_birth: Date | None = None
 
 
 EXTRACTION_SCHEMAS = {

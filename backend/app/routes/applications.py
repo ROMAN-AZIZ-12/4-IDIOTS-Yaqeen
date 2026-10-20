@@ -190,6 +190,7 @@ def get_application(
             created_at=d.created_at,
         )
         for d in application.documents
+        if d.is_current
     ]
 
     if user.role == "borrower":
