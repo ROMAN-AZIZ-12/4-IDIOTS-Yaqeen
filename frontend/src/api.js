@@ -32,7 +32,13 @@ async function request(path, options = {}) {
     ...options.headers,
   };
   const token = options.overrideToken || getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+    // Fallback for proxies (e.g. the DevMarketplace preview) that strip the
+    // standard Authorization header. The backend prefers Authorization and only
+    // uses this header when Authorization is absent.
+    headers["X-Yaqeen-Token"] = token;
+  }
   const response = await fetch(url, { ...options, headers });
   let data = null;
   const contentType = response.headers.get("content-type");

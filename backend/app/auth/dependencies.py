@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, Header, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,10 @@ from app.db import get_db
 from app.models import Application, User
 
 bearer_scheme = HTTPBearer(auto_error=False)
+
+# Compatibility header for proxies (e.g. the DevMarketplace preview) that strip
+# the standard Authorization header before the request reaches FastAPI.
+FALLBACK_TOKEN_HEADER = "X-Yaqeen-Token"
 
 
 class CurrentUser:
@@ -35,10 +39,40 @@ class CurrentUser:
 
 def _token_from_header(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    x_yaqeen_token: Annotated[str | None, Header(alias=FALLBACK_TOKEN_HEADER)] = None,
 ) -> str:
-    if credentials is None:
-        raise HTTPException(status_code=401, detail="Missing authentication")
-    return credentials.credentials
+    """Resolve the bearer token, preferring Authorization over the fallback header.
+
+    Security rules:
+      * Authorization (a valid ``Bearer <token>``) is always preferred.
+      * A malformed Authorization header is rejected and never bypassed by the
+        fallback, so an attacker cannot downgrade to the custom header.
+      * The fallback ``X-Yaqeen-Token`` is used only when Authorization is absent.
+      * If both carry a token and they disagree, the request is rejected rather
+        than silently picking one.
+    """
+    header_token = credentials.credentials if credentials is not None else None
+    fallback_token = x_yaqeen_token.strip() if x_yaqeen_token else None
+
+    # A present-but-unparseable Authorization header must never be bypassed by
+    # the fallback: HTTPBearer returns None for malformed values, so detect the
+    # raw header separately and reject it outright.
+    if header_token is None and authorization is not None and authorization.strip():
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+
+    if header_token:
+        # Both present: they must match exactly; otherwise reject the ambiguity.
+        if fallback_token and fallback_token != header_token:
+            raise HTTPException(
+                status_code=401, detail="Conflicting authentication tokens"
+            )
+        return header_token
+
+    if fallback_token:
+        return fallback_token
+
+    raise HTTPException(status_code=401, detail="Missing authentication")
 
 
 def get_current_user(

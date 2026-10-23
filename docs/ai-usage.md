@@ -36,3 +36,14 @@ Human review is pending for extraction prompts, scoring edge cases, access contr
 Supabase integration, frontend error handling, dependency licenses and actual
 pytest/database/run verification. The demo flow is implemented but must be exercised
 with configured integrations before presentation.
+
+Preview authentication fix was AI-assisted: the DevMarketplace preview proxy strips
+the standard Authorization header, so a proxy-safe X-Yaqeen-Token fallback was added.
+The FastAPI auth dependency now prefers Authorization, accepts X-Yaqeen-Token only when
+Authorization is absent, rejects a malformed Authorization header (never bypassing it via
+the fallback), and rejects conflicting tokens. CORS was extended to allow X-Yaqeen-Token,
+the React API client now sends both headers, and the startup sweep's variable scope bug
+was corrected. Focused tests cover Authorization, fallback, missing/conflicting/malformed
+headers, invalid fallback tokens, and CORS preflight. Human review and actual pytest and
+frontend build verification remain pending; no migrations, data changes, commits or pushes
+were performed, and existing API contracts and unrelated files were left unchanged.

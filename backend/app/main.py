@@ -19,6 +19,7 @@ from app.routes import documents as documents_routes
 
 def _startup_sweep(settings: Settings) -> None:
     """Re-queue applications stuck in processing for longer than five minutes."""
+    app_ids: list = []
     try:
         factory = get_session_factory()
         with factory.begin() as session:
@@ -32,13 +33,14 @@ def _startup_sweep(settings: Settings) -> None:
             for app in apps:
                 app.processing_started_at = datetime.now(timezone.utc)
                 app.processing_attempts += 1
+                app_ids.append(app.id)
     except Exception:
         # Sweep failures must not prevent the app from starting.
         return
 
-    for app in apps:
+    for app_id in app_ids:
         try:
-            run_pipeline(app.id, settings)
+            run_pipeline(app_id, settings)
         except Exception:
             pass
 
@@ -50,7 +52,9 @@ def create_app(*, validate_all: bool = True) -> FastAPI:
     application = FastAPI(title="Yaqeen", docs_url=None, redoc_url=None, openapi_url=None)
     application.add_middleware(
         CORSMiddleware, allow_origins=[settings.FRONTEND_ORIGIN],
-        allow_methods=["GET", "POST"], allow_headers=["Authorization", "Content-Type"],
+        allow_methods=["GET", "POST"],
+        # X-Yaqeen-Token is a proxy-safe fallback for the Authorization header.
+        allow_headers=["Authorization", "Content-Type", "X-Yaqeen-Token"],
         allow_credentials=False,
     )
 

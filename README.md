@@ -1,118 +1,169 @@
-# Yaqeen — Demo-ready MVP
+Yaqeen — AI-Assisted Loan Application Review
+Take the next step for your business, with confidence.
 
-Yaqeen is a borrower-to-bank-officer loan preparation demo. Borrowers select a bank, create an application, upload three documents, and submit for extraction and scoring. Officers review the generated report and make the final decision.
+Yaqeen is an English–Urdu MVP that connects borrowers with bank officers through a document-based loan application workflow. Borrowers submit applications and supporting documents; Google Gemini extracts information, Python calculates an explainable assessment, and a bank officer makes the final decision.
+The complete borrower-to-officer workflow has been manually tested locally by the project team.
+Features
+- Borrower signup and login.
+- Bank selection and loan application creation.
+- CNIC, utility bill, and transaction statement uploads.
+- Private document storage and versioned replacements.
+- AI-assisted extraction with structured validation and bounded retries.
+- Rule-based scoring, consistency flags, and officer-readable reports.
+- Officer login with authenticator-based two-factor authentication.
+- Bank-scoped officer review and approve, reject, or request-document actions.
+- Borrower-visible application status and decision notes.
+- English–Urdu interface with right-to-left support.
+Technology stack
+Area	Technologies
+Frontend	React, Vite, JavaScript, HTML, CSS
+Backend	Python, FastAPI, Uvicorn, Pydantic
+Database	Supabase PostgreSQL, SQLAlchemy, Alembic
+Document storage	Private Supabase Storage bucket
+AI	Google Gemini
+Authentication	bcrypt, JWT, TOTP, Fernet encryption for TOTP secrets
 
-## Run locally
 
-Set the variables in `.env.example` and `backend/.env.example` through the workspace Secrets panel. Never commit `.env` or real personal data.
-
-```powershell
-npm install
-npm run dev
-```
-
-Open `http://localhost:5173`. The Vite frontend proxies `/api` to the FastAPI server on port 8000. Data and processing state require the configured external Supabase database, private storage bucket, and Gemini settings; migrations and the synthetic seed run from `backend/` as documented below.
-
-```powershell
-Set-Location backend
-python -m alembic upgrade head
-python -m app.seed
-```
-
-The demo uses the existing Phase 2 authentication and Phase 4 application, private-document, extraction, scoring, report, and decision routes. AI output is a suggestion; the officer remains the decision maker.
-
-
-
-This build includes the complete demo journey: borrower authentication, bank selection,
-application creation, private document uploads, background extraction/scoring, officer
-review and borrower-visible decisions. Existing React/Vite files and frozen SRS sections
-6.2, 8, 9 and 10 are unchanged. The borrower response intentionally hides assessment
-scores and reports; officers receive the assessment and final report.
-
-## Environment
-
-Set the names listed in `.env.example` in the workspace **Secrets** panel (or your
-PowerShell process environment). No code reads or writes `.env`. Do not print secrets.
-Use only your existing external Supabase PostgreSQL **Session pooler**, port 5432,
-`postgresql+psycopg://` driver, with the project-qualified pooler username. Do not
-create a second database. `ENV` must be `local` or `production`. The imported backend
-example retains its existing values at the user's request; it is not a validated
-runtime configuration. Only the missing empty `SEED_PASSWORD` entry was added there.
-All backend settings are required at server start except `SEED_PASSWORD` (seed only).
-The health handler itself makes no database, storage or Gemini calls.
-
-## PowerShell setup
-
-Python 3.11+ with pip and network access is required. Exact installed Python/Node
-versions were not inspectable here. From the repository root:
-
-```powershell
+Requirements
+- Python 3.11 or newer with pip.
+- Node.js and npm compatible with the Vite version installed by this repository.
+- An existing Supabase project, PostgreSQL connection, and private storage bucket.
+- A Gemini API key with access to the configured model.
+- Internet access for installation and external services.
+First-time setup — Windows PowerShell
+Run these commands from the repository root.
+1. Install dependencies
 python -m venv backend/.venv
-. backend/.venv/Scripts/Activate.ps1
-python -m pip install -r backend/requirements.txt
+.\backend\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
+npm install
+If a working backend/.venv already exists, skip its creation. If the launcher reports that Vite is missing and the frontend has its own package manifest, install its dependencies:
+npm --prefix frontend install
+2. Configure the backend
+Create backend/.env using the repository's environment example. If backend/.env.example is present, this command copies it only when no local configuration exists:
+if (!(Test-Path backend/.env)) {
+    Copy-Item backend/.env.example backend/.env
+}
+If the example is stored at the repository root instead, copy .env.example to backend/.env. Edit the resulting file and supply the required values.
+The updated backend settings loader reads backend/.env independently of the working directory. Existing process environment variables, including injected workspace Secrets, take precedence over the file.
+Variable	Purpose
+ENV	local for local development or production for production configuration
+DATABASE_URL	Supabase PostgreSQL connection using the postgresql+psycopg:// driver
+SUPABASE_URL	Supabase project URL
+SUPABASE_SERVICE_ROLE_KEY	Backend-only credential used for storage access
+STORAGE_BUCKET	Name of the existing private document bucket, such as documents
+GEMINI_API_KEY	Backend-only Gemini API key
+GEMINI_MODEL	Explicit model identifier available to the project
+JWT_SECRET	Strong random secret used to sign authentication tokens
+ACCESS_TOKEN_MINUTES	Access-token lifetime; the local demo configuration uses 30
+PENDING_TOKEN_MINUTES	Pending two-factor token lifetime; the local demo configuration uses 5
+FERNET_KEY	Valid Fernet key for encrypting stored TOTP secrets
+FRONTEND_ORIGIN	Frontend origin; normally http://localhost:5173 locally
+SEED_PASSWORD	Password for initial synthetic officer accounts; required only for seeding
+
+
+Use the connection details provided by your existing Supabase project. The project's documented setup uses the Session pooler on port 5432 with its project-qualified username.
+Keep .env, API keys, database passwords, signing secrets, and real personal documents out of Git. Backend credentials must not be placed in VITE_* variables.
+3. Check configuration
+node scripts/backend.cjs check
+This validates backend configuration. It does not prove that the database, storage service, or Gemini is reachable.
+4. Apply migrations and create demo accounts
 Set-Location backend
-python -m compileall -q app migrations tests
-python -m pytest
-python -m alembic upgrade head
-python -m app.seed
-python -m app.seed
-python -m uvicorn app.main:app --reload
-```
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m app.seed
+Set-Location ..
+The seed creates two synthetic banks and their officer accounts:
+Bank	Officer email
+Yaqeen Synthetic Bank A	officer.a@example.invalid
+Yaqeen Synthetic Bank B	officer.b@example.invalid
 
-In another terminal:
 
-```powershell
+Use the SEED_PASSWORD value supplied when the accounts were first created. Running the seed again does not reset existing passwords or two-factor authentication. These identities are for demonstration only.
+5. Start the application
+node scripts/backend.cjs dev
+The combined launcher starts both Vite and FastAPI. With no port overrides:
+- Frontend: http://localhost:5173
+- Backend health endpoint: http://localhost:8000/health
+For subsequent sessions, run the same start command from the repository root. Virtual-environment activation is not required because the launcher selects backend/.venv directly. Stop the application with Ctrl+C.
+Ports and preview routing
+The corrected launcher and Vite configuration use matching settings:
+Setting	Resolution order
+Frontend listener	PORT, then FRONTEND_PORT, then 5173
+Backend listener	BACKEND_PORT, then 8000
+Vite API proxy	/api/* forwards to http://127.0.0.1:<backend port>/*, removing /api
+
+
+If a preview platform supplies PORT=3000, Vite listens on 3000 and FastAPI remains on 8000 unless BACKEND_PORT is set. The platform's public preview must point to Vite. The frontend and backend must use different ports.
+Port overrides for the Node launcher must be provided through the shell or platform environment; the Python loader does not export backend/.env values back to Node.
+The frontend normally uses relative /api requests. VITE_API_URL can provide an explicit API origin for a separately configured deployment. Set FRONTEND_ORIGIN to the appropriate frontend origin when changing the deployment configuration.
+Demo walkthrough
+1. Register and sign in as a borrower.
+2. Select a bank and create an application with the requested amount, purpose, and business details.
+3. Upload a CNIC, utility bill, and transaction statement using synthetic test data.
+4. Submit the application and wait for processing.
+5. Sign in as the seeded officer for the selected bank.
+6. On first officer login, enroll an authenticator app and verify its code. On later logins, enter the current authenticator code.
+7. Review the supporting documents, factor scores, flags, and report.
+8. Approve, reject, or request a replacement document. Rejection and document requests require a note.
+9. Sign back in as the borrower to view the status and decision note.
+Uploading the requested replacement document starts reprocessing. Borrower responses intentionally exclude the internal assessment scores and report.
+Extraction and assessment
+Gemini extracts structured document data, which is validated using Pydantic. Python computes the numeric score from the extracted inputs; Gemini does not assign the factor points.
+Factor	Maximum points
+Income consistency	30
+Bill payment history	25
+Transaction regularity	25
+Document consistency and completeness	20
+Total	100
+
+
+The current rubric suggests lean_approve at 70 or above, review from 50 to 69, and lean_reject below 50. These are review suggestions, not automatic decisions. Requested amount and net inflow are separate affordability information and do not contribute points to this rubric.
+The score is a prototype assessment, not a probability of approval or repayment. Structured validation checks data shape and types; it does not authenticate documents or independently verify their facts. Short histories and missing fields can reduce scores even when images are clear.
+Processing states
+Status	Meaning
+draft	Application is being prepared
+processing	Extraction and assessment are running
+ready_for_review	An assessment is available for officer review
+needs_documents	The officer requested a replacement document
+needs_manual_review	Extraction validation could not produce a usable result
+processing_failed	Processing encountered a service or other failure
+approved	Officer approved the application
+rejected	Officer rejected the application
+
+
+Main API routes
+Paths below are backend paths. Browser requests through Vite use the /api prefix.
+Method	Path	Purpose
+POST	/auth/signup	Register a borrower
+POST	/auth/login	Authenticate a borrower or begin officer TOTP flow
+POST	/auth/2fa/setup	Set up officer TOTP using a pending token
+POST	/auth/2fa/verify	Verify officer TOTP and issue an access token
+GET	/banks	List banks for an authenticated user
+POST	/applications	Create an application
+GET	/applications	List applications accessible to the caller
+GET	/applications/{id}	Retrieve an accessible application
+POST	/applications/{id}/documents	Upload a document
+POST	/applications/{id}/submit	Submit for processing
+GET	/documents/{id}/url	Request a temporary document URL
+POST	/applications/{id}/decision	Record an officer decision
+POST	/applications/{id}/retry	Retry eligible failed processing
+GET	/health	Application health response
+
+
+Standard authenticated requests use Authorization: Bearer <token>. Officer login issues a pending token until TOTP verification succeeds. Token lifetimes come from the configured environment values.
+Checks and local testing
+Check the running health endpoint:
 Invoke-RestMethod http://localhost:8000/health
-```
-
-must give `status: ok` (HTTP JSON is exactly `{"status":"ok"}`).
-
-Authentication routes (Phase 2):
-
-- `POST /auth/signup` — borrowers only (`email`, `password` ≥ 8, `full_name`).
-- `POST /auth/login` — borrowers receive an access JWT; officers receive a pending
-  token and must complete TOTP.
-- `POST /auth/2fa/setup` — officer-only, pending token; returns `otpauth_uri` and
-  `secret`. The secret is stored Fernet-encrypted.
-- `POST /auth/2fa/verify` — officer-only, pending token + 6-digit code; returns an
-  access JWT. First successful verification enables TOTP. Five wrong codes lock the
-  account for 15 minutes (the fifth wrong attempt returns 429, as do later attempts
-  while locked). Replaying the same time step is rejected.
-- `GET /banks` — any authenticated user; returns `{id, name}` for each bank.
-
-Access tokens expire in 30 minutes; pending tokens expire in 5 minutes and carry the
-`pending_2fa` scope. Pending tokens are accepted only by the two `/auth/2fa/*` routes.
-
-First seed creates two banks and two officers; the second must report zero created.
-Existing hashes/2FA state are never reset. Seed passwords are bcrypt cost 12;
-`SEED_PASSWORD` must be 8–72 UTF-8 bytes. The seed command is module execution from
-`backend/`, not `python seed.py`.
-
-For the workspace's npm preview, `npm install` creates the same Python virtual
-environment and installs requirements; `npm run dev` serves the backend using `PORT`
-or 8000. This does not change or launch the frontend. A Node-only VM without Python
-cannot run this Python project; it needs a Python-enabled runtime.
-
-## Verification and review still required
-
-No shell tool was exposed during implementation. **No compilation, install, pytest,
-server, HTTP, migration, seed, git diff or git status command was executed.**
-Auth tests use an in-memory session double, not PostgreSQL; live TOTP, constraint and
-migration behaviour still require the external database.
-
-Review section 9 against model/migration nullability/defaults before applying the
-migration. `locked_until` is nullable for unlocked users. Otherwise fields are non-null
-unless explicitly nullable in section 9. UUIDs are generated by SQLAlchemy/seed.
-Timestamps are timezone-aware PostgreSQL timestamps; `now()` represents UTC instants.
-`updated_at` advances on ORM updates (raw SQL callers must update it themselves).
-The immutable `yaqeen_factor_total` helper supports an array or keyed object of factor
-objects with numeric nonnegative `points`; malformed/empty input fails the score check.
-Human review must confirm this internal JSON interpretation before later scoring work.
-Use Alembic, not `Base.metadata.create_all`, to install the helper and schema.
-
-On an approved disposable external test database only, verify downgrade/upgrade;
-**downgrade deletes all Phase 1 data**. Never downgrade a shared database casually.
-After verification run `git diff --check`, `git diff`, `git status --short`,
-`git ls-files` and `git diff --cached --name-only`; verify no secrets, `.env`, `.venv`,
-node_modules, caches or build output is tracked/staged. Existing ignore rules cover
-the named artifacts but cannot prove they were never tracked. No commit/push was made.
+Expected response:
+{"status":"ok"}
+The health endpoint does not check database, storage, or Gemini connectivity.
+Run backend tests from the repository root:
+Set-Location backend
+.\.venv\Scripts\python.exe -m pytest
+Set-Location ..
+The project team has manually exercised the complete workflow locally. Test results depend on the checked-out revision and environment; run the available tests after making changes. Successful local testing does not establish production readiness.
+Current scope and next steps
+The MVP uses seeded officers; public officer registration and bank approval are planned improvements. Document name consistency checks do not establish verified borrower identity. Document hashes are stored, but cross-application duplicate detection is a planned capability.
+Next steps include stronger identity consistency checks, document-reuse review signals, bank-approved officer onboarding, broader scoring evaluation, and production deployment testing.
+Contributing and sharing
+Use synthetic examples for demos. Review staged changes before committing, and exclude local environments, credentials, uploaded personal documents, dependencies, and caches. Apply schema changes through Alembic; do not replace migrations with Base.metadata.create_all().
+Additional requirements and AI development notes are available in docs/SRS.md and docs/ai-usage.md.
